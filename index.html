@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEVENTEEN Rhythm Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-image: url('https://example.com/seventeen-bg.jpg');
+            background-size: cover;
+        }
+        
+        #game-container {
+            width: 800px;
+            height: 600px;
+            margin: 20px auto;
+            position: relative;
+        }
+        
+        #track {
+            width: 100%;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.7);
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .note-line {
+            width: 100%;
+            height: 80px;
+            position: absolute;
+            bottom: 0;
+            display: flex;
+        }
+        
+        .lane {
+            flex: 1;
+            height: 100%;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+        
+        .lane:last-child {
+            border-right: none;
+        }
+        
+        .note {
+            width: 100%;
+            height: 20px;
+            background-color: #f5a9b8;
+            position: absolute;
+            border-radius: 5px;
+            box-shadow: 0 0 10px #ff69b4;
+        }
+        
+        #hit-area {
+            width: 100%;
+            height: 10px;
+            background-color: rgba(255, 105, 180, 0.5);
+            position: absolute;
+            bottom: 30px;
+        }
+        
+        #controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            margin: 0 10px;
+            background-color: #333;
+            border: 2px solid #f5a9b8;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        
+        .control-btn:hover {
+            background-color: #f5a9b8;
+            color: black;
+        }
+        
+        #song-selector {
+            margin: 20px auto;
+            text-align: center;
+        }
+        
+        select, button {
+            padding: 10px 15px;
+            margin: 0 10px;
+            background-color: #333;
+            color: white;
+            border: 1px solid #f5a9b8;
+            border-radius: 5px;
+        }
+        
+        #score-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #f5a9b8;
+        }
+        
+        #combo-display {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            font-size: 20px;
+            color: #f5a9b8;
+        }
+        
+        .judgement {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 36px;
+            color: gold;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score-display">Score: 0</div>
+        <div id="combo-display">Combo: 0</div>
+        
+        <div id="song-selector">
+            <select id="song-options">
+                <option value="dont_wanna_cry">Don't Wanna Cry</option>
+                <option value="very_nice">Very Nice</option>
+                <option value="left_right">Left & Right</option>
+                <option value="hot">Hot</option>
+                <option value="rock_with_you">Rock with you</option>
+            </select>
+            <button id="start-btn">Start Game</button>
+        </div>
+        
+        <div id="track">
+            <div id="hit-area"></div>
+            <div class="note-line">
+                <div class="lane" id="lane-1"></div>
+                <div class="lane" id="lane-2"></div>
+                <div class="lane" id="lane-3"></div>
+                <div class="lane" id="lane-4"></div>
+            </div>
+        </div>
+        
+        <div id="controls">
+            <div class="control-btn" data-key="ArrowLeft">←</div>
+            <div class="control-btn" data-key="ArrowDown">↓</div>
+            <div class="control-btn" data-key="ArrowUp">↑</div>
+            <div class="control-btn" data-key="ArrowRight">→</div>
+        </div>
+        
+        <div class="judgement" id="judgement">PERFECT</div>
+    </div>
+
+    <script>
+        // 游戏状态
+        const gameState = {
+            score: 0,
+            combo: 0,
+            isPlaying: false,
+            notes: [],
+            lastNoteTime: 0,
+            songData: {
+                dont_wanna_cry: { bpm: 110, notes: generateRandomNotes(110) },
+                very_nice: { bpm: 128, notes: generateRandomNotes(128) },
+                left_right: { bpm: 120, notes: generateRandomNotes(120) },
+                hot: { bpm: 125, notes: generateRandomNotes(125) },
+                rock_with_you: { bpm: 115, notes: generateRandomNotes(115) }
+            },
+            currentSong: null,
+            audio: null
+        };
+        
+        // DOM元素
+        const elements = {
+            track: document.getElementById('track'),
+            lanes: [
+                document.getElementById('lane-1'),
+                document.getElementById('lane-2'),
+                document.getElementById('lane-3'),
+                document.getElementById('lane-4')
+            ],
+            scoreDisplay: document.getElementById('score-display'),
+            comboDisplay: document.getElementById('combo-display'),
+            judgement: document.getElementById('judgement'),
+            startBtn: document.getElementById('start-btn'),
+            songSelector: document.getElementById('song-options')
+        };
+        
+        // 生成随机音符数据（实际游戏中应该使用精心设计的谱面）
+        function generateRandomNotes(bpm) {
+            const notes = [];
+            const noteInterval = 60000 / bpm; // 毫秒/拍
+            const duration = 60000; // 1分钟游戏时长
+            
+            for (let time = 2000; time < duration; time += noteInterval) {
+                const lane = Math.floor(Math.random() * 4);
+                notes.push({
+                    time: time,
+                    lane: lane,
+                    duration: 100
+                });
+                
+                // 偶尔添加连续音符
+                if (Math.random() > 0.7) {
+                    notes.push({
+                        time: time + noteInterval/2,
+                        lane: (lane + 1) % 4,
+                        duration: 100
+                    });
+                }
+            }
+            
+            return notes;
+        }
+        
+        // 创建音符元素
+        function createNote(lane, speed) {
+            const note = document.createElement('div');
+            note.className = 'note';
+            note.style.bottom = '100%';
+            
+            // 根据歌曲BPM设置下落速度
+            note.style.transition = `bottom ${speed}ms linear`;
+            
+            elements.lanes[lane].appendChild(note);
+            
+            // 强制重绘
+            note.getBoundingClientRect();
+            
+            // 开始下落
+            note.style.bottom = '30px';
+            
+            return note;
+        }
+        
+        // 检查命中
+        function checkHit(lane) {
+            const hitArea = document.getElementById('hit-area');
+            const hitRect = hitArea.getBoundingClientRect();
+            const hitY = hitRect.top + hitRect.height / 2;
+            
+            const notes = elements.lanes[lane].querySelectorAll('.note');
+            let hitNote = null;
+            
+            notes.forEach(note => {
+                const noteRect = note.getBoundingClientRect();
+                const noteY = noteRect.top + noteRect.height / 2;
+                
+                // 检查音符是否在命中区域内
+                if (Math.abs(noteY - hitY) < 20) {
+                    hitNote = note;
+                }
+            });
+            
+            if (hitNote) {
+                // 计算命中精度
+                const noteRect = hitNote.getBoundingClientRect();
+                const noteY = noteRect.top + noteRect.height / 2;
+                const diff = Math.abs(noteY - hitY);
+                
+                let judgement = 'GOOD';
+                let points = 100;
+                
+                if (diff < 5) {
+                    judgement = 'PERFECT';
+                    points = 300;
+                } else if (diff < 10) {
+                    judgement = 'GREAT';
+                    points = 200;
+                }
+                
+                // 更新分数和连击
+                gameState.score += points;
+                gameState.combo += 1;
+                
+                // 显示判定
+                elements.judgement.textContent = judgement;
+                elements.judgement.style.opacity = 1;
+                elements.judgement.style.transform = 'translateX(-50%) scale(1.2)';
+                
+                setTimeout(() => {
+                    elements.judgement.style.opacity = 0;
+                    elements.judgement.style.transform = 'translateX(-50%) scale(1)';
+                }, 300);
+                
+                // 移除音符
+                hitNote.remove();
+                
+                // 更新显示
+                updateDisplay();
+                
+                return true;
+            }
+            
+            return false;
+        }
+        
+        // 更新分数和连击显示
+        function updateDisplay() {
+            elements.scoreDisplay.textContent = `Score: ${gameState.score}`;
+            elements.comboDisplay.textContent = `Combo: ${gameState.combo}`;
+            
+            // 连击数高时改变颜色
+            if (gameState.combo >= 10) {
+                elements.comboDisplay.style.color = 'gold';
+            } else {
+                elements.comboDisplay.style.color = '#f5a9b8';
+            }
+        }
+        
+        // 开始游戏
+        function startGame() {
+            if (gameState.isPlaying) return;
+            
+            const songId = elements.songSelector.value;
+            gameState.currentSong = gameState.songData[songId];
+            gameState.score = 0;
+            gameState.combo = 0;
+            gameState.isPlaying = true;
+            gameState.lastNoteTime = 0;
+            
+            updateDisplay();
+            
+            // 清除所有现有音符
+            elements.lanes.forEach(lane => {
+                while (lane.firstChild) {
+                    lane.removeChild(lane.firstChild);
+                }
+            });
+            
+            // 模拟音频播放（实际项目中应加载真实音频）
+            gameState.audio = {
+                currentTime: 0,
+                play: function() {
+                    this.interval = setInterval(() => {
+                        this.currentTime += 16; // 约60fps
+                    }, 16);
+                },
+                pause: function() {
+                    clearInterval(this.interval);
+                }
+            };
+            
+            gameState.audio.play();
+            
+            // 开始生成音符
+            gameState.noteInterval = setInterval(() => {
+                const currentTime = gameState.audio.currentTime;
+                
+                // 检查是否有音符需要生成
+                gameState.currentSong.notes.forEach(note => {
+                    if (note.time >= currentTime - 100 && note.time < currentTime + 100 && note.time > gameState.lastNoteTime) {
+                        const speed = 2000; // 下落时间（毫秒），应根据轨道高度和BPM调整
+                        createNote(note.lane, speed);
+                        gameState.lastNoteTime = note.time;
+                    }
+                });
+                
+                // 检查游戏是否结束（简单模拟）
+                if (currentTime > 60000) {
+                    endGame();
+                }
+            }, 16);
+        }
+        
+        // 结束游戏
+        function endGame() {
+            gameState.isPlaying = false;
+            clearInterval(gameState.noteInterval);
+            if (gameState.audio) {
+                gameState.audio.pause();
+            }
+            
+            alert(`Game Over! Your score: ${gameState.score}`);
+        }
+        
+        // 事件监听
+        elements.startBtn.addEventListener('click', startGame);
+        
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (!gameState.isPlaying) return;
+            
+            let lane = -1;
+            
+            switch (e.key) {
+                case 'ArrowLeft': lane = 0; break;
+                case 'ArrowDown': lane = 1; break;
+                case 'ArrowUp': lane = 2; break;
+                case 'ArrowRight': lane = 3; break;
+                default: return;
+            }
+            
+            // 高亮按键
+            const btn = document.querySelector(`.control-btn[data-key="${e.key}"]`);
+            btn.style.backgroundColor = '#f5a9b8';
+            btn.style.color = 'black';
+            
+            setTimeout(() => {
+                btn.style.backgroundColor = '#333';
+                btn.style.color = 'white';
+            }, 100);
+            
+            // 检查命中
+            if (!checkHit(lane)) {
+                // 未命中，重置连击
+                gameState.combo = 0;
+                updateDisplay();
+            }
+        });
+        
+        // 按钮控制
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!gameState.isPlaying) return;
+                
+                const key = btn.getAttribute('data-key');
+                let lane = -1;
+                
+                switch (key) {
+                    case 'ArrowLeft': lane = 0; break;
+                    case 'ArrowDown': lane = 1; break;
+                    case 'ArrowUp': lane = 2; break;
+                    case 'ArrowRight': lane = 3; break;
+                }
+                
+                // 检查命中
+                if (!checkHit(lane)) {
+                    // 未命中，重置连击
+                    gameState.combo = 0;
+                    updateDisplay();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
